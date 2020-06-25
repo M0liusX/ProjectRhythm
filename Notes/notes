@@ -1,0 +1,2 @@
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:"/home/mmolina/Documents/GIT/TOOLS/libsoundio/build"
+gcc -lsoundio -lncurses -lm main.c
