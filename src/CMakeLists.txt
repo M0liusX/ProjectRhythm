@@ -1,6 +1,6 @@
 list(APPEND SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/main.c
-    ${CMAKE_CURRENT_SOURCE_DIR}/wave.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/main.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/wave.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/wave.h
 )
 

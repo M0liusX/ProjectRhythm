@@ -2,7 +2,7 @@
 * Read and parse a wave file
 *
 **/
-#include <unistd.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -17,34 +17,6 @@ unsigned char buffer2[2];
 
 FILE *ptr;
 char *filename;
-
-//Takes file name if used as main and parses it
-int not_main(int argc, char **argv){
-    filename = (char*) malloc(sizeof(char) * 1024);
-    if (filename == NULL) {
-    printf("Error in malloc\n");
-    exit(1);
-    }
-
-    // get file path
-    char cwd[1024];
-    if (getcwd(cwd, sizeof(cwd)) != NULL) {
-   
-        strcpy(filename, cwd);
-
-        // get filename from command line
-        if (argc < 2) {
-            printf("No wave file specified\n");
-            return -1;
-        }
-	
-        strcat(filename, "/");
-        strcat(filename, argv[1]);
-        printf("%s\n", filename);
-    }
-    struct WAVE wave_file;
-    return parse(filename, &wave_file);
-}
 
 float to_float(int sample, int low_limit, int high_limit){
     if(sample < 0){
@@ -188,7 +160,7 @@ int parse(char* filename, struct WAVE* wave) {
 	//scanf("%c", &c);
     //if (c == 'Y' || c == 'y') { 
     long i =0;
-    char data_buffer[size_of_each_sample];
+    char* data_buffer = (char*) malloc(sizeof(char) * size_of_each_sample);
     int  size_is_correct = TRUE;
 
     // make sure that the bytes-per-sample is completely divisible by num.of channels
@@ -219,10 +191,10 @@ int parse(char* filename, struct WAVE* wave) {
         }					
 
         printf("\n\n.Valid range for data values : %ld to %ld \n", low_limit, high_limit);
-        wave->buffer = malloc(sizeof(float) * header->channels * num_samples);
+        wave->buffer = (float*) malloc(sizeof(float) * header->channels * num_samples);
         for (i =1; i <= num_samples; i++) {
            //printf("==========Sample %ld / %ld=============\n", i, num_samples);
-            read = fread(data_buffer, sizeof(data_buffer), 1, ptr);
+            read = fread(data_buffer, sizeof(char) * size_of_each_sample, 1, ptr);
             if (read == 1) {
             
                 // dump the data read
@@ -263,14 +235,11 @@ int parse(char* filename, struct WAVE* wave) {
         } // 	for (i =1; i <= num_samples; i++) {
 
     } // 	if (size_is_correct) { 
-
+	free(data_buffer);
  } //  if (header->format_type == 1) { 
 
  printf("Closing file..\n");
  fclose(ptr);
-
-  // cleanup before quitting
- free(filename);
  return 0;
 
 }

@@ -1,4 +1,6 @@
 #include <soundio/soundio.h>
+#include <gainput/gainput.h>
+#include <windows.h>
 
 // #include <glm/vec4.hpp>
 // #include <glm/mat4x4.hpp>
@@ -9,7 +11,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h> 
-#include <curses.h>
+//#include <curses.h>
+
+#define SFW_LOG(...) { char buf[1024]; sprintf(buf, __VA_ARGS__); OutputDebugStringA(buf); }
+
+enum Button
+{
+    ButtonConfirm
+};
 
 void hello_world() {
    printf("Hello World!\n");
@@ -28,16 +37,16 @@ static void write_callback(struct SoundIoOutStream *outstream,
     float seconds_per_frame = 1.0f / float_sample_rate;
     struct SoundIoChannelArea *areas;
     int frames_left = frame_count_max;
+	if (frame_count_max > wave.num_samples) {
+		frames_left = wave.num_samples;
+	}
     int err;
 
     while (frames_left > 0) {
         int frame_count = frames_left;
         int pos = play(&wavePlayer, frame_count);
-        //printf("%d\n", pos);
         if (pos == -1){
-            //soundio_outstream_pause(outstream, true);
-            //printf("Called");
-            return 1;
+            return;
         }
 
         if ((err = soundio_outstream_begin_write(outstream, &areas, &frame_count))) {
@@ -50,6 +59,7 @@ static void write_callback(struct SoundIoOutStream *outstream,
             
         for (int frame = 0; frame < frame_count; frame += 1) {
             for (int channel = 0; channel < layout->channel_count; channel += 1) {
+				if (frame + pos >= wave.num_samples) { continue; }
                 float *ptr = (float*)(areas[channel].ptr + areas[channel].step * frame);
                 *ptr = wave.buffer[(frame+pos)*wave.header.channels + channel%wave.header.channels];
             }
@@ -67,44 +77,14 @@ static void write_callback(struct SoundIoOutStream *outstream,
     }
 }
 
-int main(int argc, char **argv) {
+int loop(HWND hWnd) {
     int err;
     struct SoundIo *soundio = soundio_create();
 
     //Obtain Wave
-    char* filename = (char*) malloc(sizeof(char) * 1024);
-    if (filename == NULL) {
-    printf("Error in malloc\n");
-    exit(1);
-    }
+	char* file = "fast_snare.wav";
+    parse(file, &wave);
 
-    // get file path
-    char cwd[1024];
-    if (getcwd(cwd, sizeof(cwd)) != NULL) {
-   
-        strcpy(filename, cwd);
-
-        // get filename from command line
-        if (argc < 2) {
-            printf("No wave file specified\n");
-            return -1;
-        }
-	
-        strcat(filename, "/");
-        strcat(filename, argv[1]);
-        printf("%s\n", filename);
-    }
-    
-    //struct WAVE wave_file;
-    parse(filename, &wave);
-
-    //Init Input Code
-    initscr();
-    cbreak();
-    noecho();
-    nodelay(stdscr, TRUE);
-    
-    printf("HI\n");
     if (!soundio) {
         fprintf(stderr, "out of memory\n");
         return 1;
@@ -131,7 +111,28 @@ int main(int argc, char **argv) {
 
     fprintf(stderr, "Output device: %s\n", device->name);
     
-    for (;;) {
+	//Input Stuff
+	gainput::InputManager manager;
+	manager.SetDisplaySize(1024, 1024);
+	const gainput::DeviceId keyboardId = manager.CreateDevice<gainput::InputDeviceKeyboard>();
+	const gainput::DeviceId mouseId = manager.CreateDevice<gainput::InputDeviceMouse>();
+	const gainput::DeviceId padId = manager.CreateDevice<gainput::InputDevicePad>();
+	const gainput::DeviceId touchId = manager.CreateDevice<gainput::InputDeviceTouch>();
+
+	gainput::InputMap map(manager);
+	map.MapBool(ButtonConfirm, keyboardId, gainput::KeyReturn);
+	map.MapBool(ButtonConfirm, keyboardId, gainput::KeyUp);
+	map.MapBool(ButtonConfirm, keyboardId, gainput::KeyLeft);
+	map.MapBool(ButtonConfirm, keyboardId, gainput::KeyRight);
+	map.MapBool(ButtonConfirm, mouseId, gainput::MouseButtonLeft);
+	map.MapBool(ButtonConfirm, padId, gainput::PadButtonA);
+	map.MapBool(ButtonConfirm, touchId, gainput::Touch0Down);
+
+	MSG msg;
+
+	SFW_LOG("BS.\n");
+
+   
     struct SoundIoOutStream *outstream = soundio_outstream_create(device);
     outstream->format = SoundIoFormatFloat32NE;
     outstream->write_callback = write_callback;
@@ -145,21 +146,92 @@ int main(int argc, char **argv) {
     if (outstream->layout_error)
         fprintf(stderr, "unable to set channel layout: %s\n", soundio_strerror(outstream->layout_error));
 
+
+	//for (;;) {}
+
     if ((err = soundio_outstream_start(outstream))) {
         fprintf(stderr, "unable to start device: %s", soundio_strerror(err));
         return 1;
     }
 
+	for (;;) {
+	while (true) {
+		manager.Update();
+		while (PeekMessage(&msg, hWnd, 0, 0, PM_REMOVE))
+		{
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+			manager.HandleMessage(msg);
+		}
 
-    char ch;
-    while( (ch = getch()) == ERR) {}
-    soundio_outstream_destroy(outstream);
+		if (map.GetBool(ButtonConfirm)) {
+			break;
+		}
+	}
+
+	//for (;;) {}
+
+    
+	soundio_outstream_clear_buffer(outstream);
     wavePlayer.pos = 0;
+	while (true) {
+		manager.Update();
+		while (PeekMessage(&msg, hWnd, 0, 0, PM_REMOVE))
+		{
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+			manager.HandleMessage(msg);
+		}
+
+		if (map.GetBoolWasDown(ButtonConfirm)) {
+			break;
+		}
+	}
     }
 
+	//soundio_outstream_destroy(outstream);
     soundio_device_unref(device);
     soundio_destroy(soundio);
 
     hello_world();
     return 0;
+}
+
+
+
+int CALLBACK WinMain(
+	HINSTANCE hInstance,
+	HINSTANCE hPrevInstance,
+	LPSTR     lpCmdLine,
+	int       nCmdShow)
+{
+	const auto pClassName = "ProjectR";
+	// register window class
+	WNDCLASSEX wc = { 0 };
+	wc.cbSize = sizeof(wc);
+	wc.style = CS_OWNDC;
+	wc.lpfnWndProc = DefWindowProc;
+	wc.cbClsExtra = 0;
+	wc.cbWndExtra = 0;
+	wc.hInstance = hInstance;
+	wc.hIcon = nullptr;
+	wc.hCursor = nullptr;
+	wc.hbrBackground = nullptr;
+	wc.lpszMenuName = nullptr;
+	wc.lpszClassName = pClassName;
+	wc.hIconSm = nullptr;
+	RegisterClassEx(&wc);
+	// create window instance
+	HWND hWnd = CreateWindowEx(
+		0, pClassName,
+		"Happy Hard Menu",
+		WS_CAPTION | WS_MINIMIZEBOX | WS_SYSMENU,
+		200, 200, 640, 480,
+		nullptr, nullptr, hInstance, nullptr
+	);
+	// show the damn window
+	ShowWindow(hWnd, SW_SHOW);
+	loop(hWnd);
+	//while (true);
+	return 0;
 }

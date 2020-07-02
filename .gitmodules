@@ -1,3 +1,6 @@
 [submodule "libsoundio"]
 	path = lib/libsoundio
 	url = https://github.com/andrewrk/libsoundio.git
+[submodule "gainput"]
+	path = lib/gainput
+	url = https://github.com/jkuhlmann/gainput.git
